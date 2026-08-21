@@ -37,7 +37,9 @@ ARG FEDORA_VERSION=44
 # nerd-fonts COPR for hack-nerd-fonts / oh-my-posh. Podman is in the base
 # silverblue image; nothing to add on the repo front.
 # ---- Repos ----
-COPY <<EOF /etc/yum.repos.d/_copr-aquacash5-nerd-fonts.repo
+ARG FEDORA_VERSION=44
+
+RUN cat > /etc/yum.repos.d/_copr-aquacash5-nerd-fonts.repo <<EOF
 [copr:copr.fedorainfracloud.org:aquacash5:nerd-fonts]
 name=Copr repo for nerd-fonts owned by aquacash5
 baseurl=https://download.copr.fedorainfracloud.org/results/aquacash5/nerd-fonts/fedora-${FEDORA_VERSION}-\$basearch/
