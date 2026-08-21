@@ -62,7 +62,9 @@ RUN rpm-ostree override remove \
         python3 \
         python3-pip \
         uv \
-        vim \
+        neovim \
+        neovim-default-editor \
+        vim-minimal \
         tmux \
         oh-my-posh \
         hack-nerd-fonts \
