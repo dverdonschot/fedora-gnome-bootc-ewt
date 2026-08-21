@@ -63,7 +63,6 @@ RUN rpm-ostree override remove \
         python3-pip \
         uv \
         neovim \
-        neovim-default-editor \
         vim-minimal \
         tmux \
         oh-my-posh \
