@@ -87,7 +87,7 @@ systemctl --user daemon-reload
 ```
 
 To re-enable after a `rpm-ostree` upgrade that touched `forgejo-runner`
-or `docker-ce-rootless-extras`, just re-run step 5.
+or podman, just re-run step 5.
 
 ## GPU troubleshooting
 

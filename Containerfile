@@ -20,9 +20,10 @@
 #   files, no symlink dance).
 # - /usr/lib/systemd/system-preset/ is the supported way to flip defaults in ostree
 #   images without touching the unit files themselves.
-# - Masking docker.service/docker.socket at build time is the only way to prevent
-#   the rootful daemon from coming back; the per-user dockerd-rootless-setuptool.sh
-#   generates ~/.config/systemd/user/docker.service after first rebase.
+# - Container runtime is `podman-docker`: the `podman-docker` package provides a
+#   `/usr/bin/docker` shim that calls `podman`. The Forgejo Actions runner shells
+#   out to `/usr/bin/docker`, so the shim keeps it working without docker-ce.
+#   Podman is already in the silverblue base; we add the shim and nothing else.
 # - rpm-ostree kargs inside a Containerfile mutates the pending deployment and
 #   persists across subsequent rebases (same as on a running system).
 
@@ -33,10 +34,9 @@ FROM quay.io/fedora-ostree-desktops/silverblue:${FEDORA_VERSION}
 ARG FEDORA_VERSION=44
 
 # ---- Repos ----
-# Docker CE repo (rootless-docker needs docker-ce-rootless-extras).
-COPY files/system/etc/yum.repos.d/docker-ce.repo /etc/yum.repos.d/docker-ce.repo
-
-# nerd-fonts COPR for hack-nerd-fonts / oh-my-posh.
+# nerd-fonts COPR for hack-nerd-fonts / oh-my-posh. Podman is in the base
+# silverblue image; nothing to add on the repo front.
+# ---- Repos ----
 COPY <<EOF /etc/yum.repos.d/_copr-aquacash5-nerd-fonts.repo
 [copr:copr.fedorainfracloud.org:aquacash5:nerd-fonts]
 name=Copr repo for nerd-fonts owned by aquacash5
@@ -78,14 +78,12 @@ RUN rpm-ostree override remove \
         ranger \
         make \
         rust \
-        rustup \
         cargo \
-        docker-ce \
-        docker-ce-cli \
-        containerd.io \
-        docker-buildx-plugin \
-        docker-compose-plugin \
-        docker-ce-rootless-extras \
+        rustup \
+        # adds a `/usr/bin/docker` → podman shim so the Forgejo runner
+        # (which only knows how to call `docker`) keeps working without
+        # pulling in docker-ce.
+        podman-docker \
         libvirt \
         libvirt-daemon-config-network \
         libvirt-daemon-kvm \
@@ -130,24 +128,19 @@ COPY files/system/ /
 
 # Helper scripts. Single-file COPY because /usr/local is a /var symlink on
 # Fedora Atomic; recursive COPY would refuse to overwrite the symlink.
-COPY files/rootless-docker/bin/setup-rootless-docker.sh /usr/local/bin/setup-rootless-docker.sh
-COPY files/rootless-docker/bin/verify-rootless-docker.sh /usr/local/bin/verify-rootless-docker.sh
 COPY files/forgejo-runner/setup-forgejo-runner.sh /usr/local/bin/setup-forgejo-runner.sh
 COPY files/forgejo-runner/config.yaml.j2 /etc/forgejo-runner/config.yaml.j2
 COPY files/forgejo-runner/README.md /usr/local/share/forgejo-runner/README.md
 COPY files/forgejo-runner/forgejo-runner.service /usr/lib/systemd/user/forgejo-runner.service
 COPY files/scripts/setup-libvirt.sh /usr/local/bin/setup-libvirt.sh
 
-# ---- Systemd preset + mask + enable ----
+# ---- Systemd preset + enable ----
 # libvirt preset is in files/system/usr/lib/systemd/system-preset/. Re-apply the
-# preset so the libvirt units ship enabled by default for the user.
-RUN systemctl preset docker.service docker.socket 2>/dev/null || true && \
-    systemctl mask docker.service docker.socket && \
-    systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket 2>/dev/null || true && \
+# preset so the libvirt units ship enabled by default for the user. Podman is
+# already socket-activated by systemd in the base image; no preset work needed.
+RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket 2>/dev/null || true && \
     systemctl enable node_exporter.service && \
     chmod 0755 \
-        /usr/local/bin/setup-rootless-docker.sh \
-        /usr/local/bin/verify-rootless-docker.sh \
         /usr/local/bin/setup-forgejo-runner.sh \
         /usr/local/bin/setup-libvirt.sh && \
     ostree container commit

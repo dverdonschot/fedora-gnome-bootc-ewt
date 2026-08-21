@@ -1,10 +1,10 @@
 # fedora-gnome-bootc-ewt
 
 A custom Fedora Atomic image built on the official GNOME desktop (`silverblue`),
-configured for personal use. Same package list, same rootless Docker, same
-forgejo-runner, same AMD GPU kargs as
-[fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-cosmic-atomic-ewt)
-— the desktop is the only difference.
+configured for personal use. Same package list, same forgejo-runner, same AMD
+GPU kargs as [fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-cosmic-atomic-ewt)
+— the desktop is the only difference. **Container runtime is podman** (with the
+`podman-docker` shim so the Forgejo runner's `docker` calls land on podman).
 
 This repo lives at `forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt` and is
 built locally, on the VPS, or by a Forgejo Actions runner. **No GitHub Actions.**
@@ -15,7 +15,6 @@ built locally, on the VPS, or by a Forgejo Actions runner. **No GitHub Actions.*
 Containerfile              # Single source of truth. buildah / podman / kaniko.
 files/
   system/                  # /etc + /usr overlay (tlp.conf, presets, …)
-  rootless-docker/bin/     # Per-user docker setup + verify scripts
   forgejo-runner/          # Runner binary + unit + post-rebase setup
   scripts/                 # One-shot post-rebase helpers (setup-libvirt.sh)
 build/
@@ -78,10 +77,10 @@ sudo systemctl reboot
 One-time, as your normal user:
 
 ```bash
-/usr/local/bin/setup-rootless-docker.sh     # rootless docker daemon
-/usr/local/bin/setup-forgejo-runner.sh      # if you want CI on this box
-/usr/local/bin/setup-libvirt.sh             # if you use virt-manager
-./build/install-flatpaks.sh                 # layered flatpaks
+systemctl --user enable --now podman.socket   # activate the per-user podman socket
+/usr/local/bin/setup-forgejo-runner.sh --enable   # if you want CI on this box
+/usr/local/bin/setup-libvirt.sh                  # if you use virt-manager
+./build/install-flatpaks.sh                      # layered flatpaks
 ```
 
 ## Why not BlueBuild?
@@ -96,9 +95,13 @@ orchestrator. The cosmic repo can keep its BlueBuild recipe (recipe-gnome.yml
 ## Customizations vs. stock silverblue
 
 - Same dnf package list as `fedora-cosmic-atomic-ewt/recipes/recipe-gnome.yml`
-- Rootless Docker (system docker.service masked)
-- Forgejo Actions runner pre-staged (operator runs setup script)
+  (minus docker-ce; podman-docker shim added so the runner's docker CLI calls
+  hit the podman socket).
+- Podman as the container runtime (rootless via `podman.socket`). The
+  Forgejo Actions runner's `DOCKER_HOST` env points at
+  `unix:///run/user/<UID>/podman/podman.sock`.
+- Forgejo Actions runner pre-staged (operator runs setup script).
 - AMD GPU stability kargs baked in (`amdgpu.gpu_recovery=1`,
-  `amdgpu.ppfeaturemask=0xffffffff`)
+  `amdgpu.ppfeaturemask=0xffffffff`).
 - TLP defaults for laptop battery care
 - Flatpaks: Firefox, Flatseal, FreeTube, Zed, Zen

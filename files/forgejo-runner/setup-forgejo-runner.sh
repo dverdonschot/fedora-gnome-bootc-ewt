@@ -2,22 +2,21 @@
 # setup-forgejo-runner.sh — install + configure (+ optionally enable)
 # the Forgejo Actions runner for the current user on Fedora Atomic.
 #
-# Default behavior:
 #   - Refuses to run as root.
-#   - Verifies rootless-docker is up.
+#   - Verifies podman is up (podman.socket in the user systemd instance).
 #   - Verifies /dev/dri/renderD128 and /dev/kfd exist and the user is
 #     in render+video groups.
 #   - Materializes ~/.config/forgejo/runners/um790/token (mode 0600,
 #     but does NOT overwrite an existing token).
 #   - Renders config.yaml from config.yaml.j2 into the user's home.
-#   - Writes the per-user DOCKER_HOST env file.
+#   - Writes the per-user DOCKER_HOST env file (pointing at the podman socket).
 #   - Does NOT enable or start the unit.
 #
 # Modes:
 #   (no arg)        — full setup (above)
-#   --wait-docker   — poll-only mode used by ExecStartPre of the
-#                     systemd unit. Equivalent to the odroid module's
-#                     wait-docker script. Idempotent, no writes.
+#   --wait-podman   — poll-only mode used by ExecStartPre of the
+#                     systemd unit. Equivalent to a wait-podman script.
+#                     Idempotent, no writes.
 #   --enable        — same as default + enable+start via systemctl
 #                     --user. The operator runs this once after
 #                     placing the token.
@@ -66,31 +65,31 @@ require() { command -v "$1" >/dev/null 2>&1 || { err "missing tool: $1"; exit 1;
 mode="setup"
 case "${1:-}" in
     "")           mode="setup" ;;
-    --wait-docker) mode="wait-docker" ;;
+    --wait-podman) mode="wait-podman" ;;
     --enable)     mode="enable" ;;
     --help|-h)    sed -n '2,30p' "$0"; exit 0 ;;
     *)            err "unknown arg: $1 (try --help)"; exit 2 ;;
 esac
 
-# ---------------------------------------------------------------------------
-# All modes need rootless-docker readiness. Implement --wait-docker here.
-if [[ "$mode" == "wait-docker" ]]; then
+# All modes need podman readiness. Implement --wait-podman here.
+if [[ "$mode" == "wait-podman" ]]; then
     require id
     require curl
     for _ in $(seq 1 60); do
         # XDG_RUNTIME_DIR is set for user systemd instances but may
         # also be set in shell-only contexts where socket lives under
-        # /run/user/<UID>. Probe both.
+        # /run/user/<UID>. Probe the podman path.
         uid=$(id -u)
-        sock="${XDG_RUNTIME_DIR:-/run/user/$uid}/docker.sock"
+        sock="${XDG_RUNTIME_DIR:-/run/user/$uid}/podman/podman.sock"
         if [[ -S "$sock" ]] && curl --unix-socket "$sock" -sS --max-time 2 \
                 http://localhost/_ping >/dev/null 2>&1; then
-            log "wait-docker: socket is listening at $sock"
+            log "wait-podman: socket is listening at $sock"
             exit 0
         fi
         sleep 1
     done
-    err "wait-docker: gave up after 60s waiting on $sock"
+    err "wait-podman: gave up after 60s waiting on $sock"
+    err "Hint: 'systemctl --user enable --now podman.socket'"
     exit 1
 fi
 
@@ -105,6 +104,8 @@ fi
 
 require id
 require systemctl
+# `docker` here is the podman-docker shim; the runner shells out to it.
+# The actual socket is podman's (see the DOCKER_HOST env we write below).
 require docker
 require getent
 
@@ -119,12 +120,13 @@ log "forgejo url   : ${RUNNER_URL}"
 log "labels        : ${LABELS}"
 
 # ---------------------------------------------------------------------------
-# 1. Verify rootless-docker is up.
-log "checking rootless docker"
-if ! systemctl --user is-active docker.service >/dev/null 2>&1; then
-    err "docker.service is not active in your user systemd instance."
-    err "run /usr/local/bin/setup-rootless-docker.sh first; the runner"
-    err "needs rootless dockerd and reuses the same socket."
+# 1. Verify podman is up. podman.socket activates the per-user podman API
+# socket; the runner's DOCKER_HOST will point at the same path.
+log "checking podman (podman.socket)"
+if ! systemctl --user is-active podman.socket >/dev/null 2>&1; then
+    err "podman.socket is not active in your user systemd instance."
+    err "run: systemctl --user enable --now podman.socket"
+    err "the runner reuses the same socket via DOCKER_HOST."
     exit 1
 fi
 
@@ -217,7 +219,7 @@ mkdir -p "${CONFIG_DIR}"
 if [[ ! -r "${CONFIG_TEMPLATE}" ]]; then
     err "config template not found at ${CONFIG_TEMPLATE}"
     err "this would normally ship in the same image at build time."
-    err "if the image is fresh, rebuild after running setup-rootless-docker.sh"
+    err "if the image is fresh, rebuild the image and rebase"
     exit 1
 fi
 
@@ -239,26 +241,24 @@ if grep -q '{{' "${CONFIG_FILE}"; then
     warn "config.yaml still has unreplaced placeholders:"
     grep -n '{{' "${CONFIG_FILE}" | head -5 >&2
     warn "this is a script bug; please file an issue on"
-    warn "https://github.com/dverdonschot/fedora-cosmic-atomic-ewt/issues"
 fi
-
 # ---------------------------------------------------------------------------
 # 5. Write the env file with DOCKER_HOST and basic envvars for the
-#    user-mode systemd unit to pick up.
+#    user-mode systemd unit to pick up. DOCKER_HOST points at the podman
+#    socket; the podman-docker shim honors it for docker CLI commands.
 log "writing ${ENV_FILE}"
 mkdir -p "${RUNNER_DIR}"
 mkdir -p "${HOST_WORKDIR_PARENT}" 2>/dev/null || {
-    # /var/tmp is on root in some configs. If we can't create the
-    # dir, log it; the daemon will fail at runtime and the operator
-    # will see the journal error.
-    warn "could not create ${HOST_WORKDIR_PARENT}; check perms"
+    warn "could not create ${HOST_WORKDIR_PARENT} as ${USER_NAME} (no sudo)";
+    warn "the runner will fail at runtime if this dir is missing"
+    warn "check perms"
 }
 cat > "${ENV_FILE}" <<EOF
-# Generated by setup-forgejo-runner.sh. Edit if you change Docker setup.
-DOCKER_HOST=unix:///run/user/${USER_UID}/docker.sock
+# Generated by setup-forgejo-runner.sh. DOCKER_HOST points at the
+# per-user podman socket; the podman-docker shim honors it.
+DOCKER_HOST=unix:///run/user/${USER_UID}/podman/podman.sock
 FORGEJO_RUNNER_TOKEN_FILE=${TOKEN_FILE_DEFAULT}
 EOF
-chmod 0600 "${ENV_FILE}"
 
 # ---------------------------------------------------------------------------
 # 6. Done with --setup; --enable also wires the unit.
