@@ -1,0 +1,7 @@
+# System flatpaks layered on first boot by build/install-flatpaks.sh.
+# Matches the cosmic repo's recipe.yml default-flatpaks configuration.
+org.mozilla.firefox
+com.github.tchx84.Flatseal
+io.freetubeapp.FreeTube
+dev.zed.Zed
+io.github.zen_browser.zen

@@ -1,0 +1,47 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/buildah/stable:latest
+      options: --privileged
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: show tool versions
+        run: |
+          buildah --version
+          podman --version || true
+
+      # Build + push are split so a failed build doesn't churn the registry
+      # with stale tags. --storage-driver=vfs sidesteps overlay issues in
+      # unprivileged containers; the image is exported to OCI anyway.
+
+      - name: build
+        env:
+          FEDORA_VERSION: ${{ vars.FEDORA_VERSION || '44' }}
+        run: |
+          chmod +x build/build.sh
+          ./build/build.sh
+
+      - name: login
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.REGISTRY_TOKEN }}" | podman login -u "${{ secrets.REGISTRY_USER }}" --password-stdin "${REGISTRY}"
+
+      - name: push
+        if: github.event_name == 'push'
+        env:
+          FEDORA_VERSION: ${{ vars.FEDORA_VERSION || '44' }}
+          REGISTRY: ${{ vars.REGISTRY || 'quay.io/ewt-lab' }}
+          IMAGE: ${{ vars.IMAGE || 'fedora-gnome-bootc-ewt' }}
+        run: ./build/build.sh --push
