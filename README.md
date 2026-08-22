@@ -5,9 +5,9 @@ configured for personal use. Same package list, same forgejo-runner, same AMD
 GPU kargs as [fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-cosmic-atomic-ewt)
 — the desktop is the only difference. **Container runtime is podman** (with the
 `podman-docker` shim so the Forgejo runner's `docker` calls land on podman).
-
-This repo lives at `forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt` and is
-built locally, on the VPS, or by a Forgejo Actions runner. **No GitHub Actions.**
+This repo lives at `forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt`. The image
+is published to **`ghcr.io/ewt-lab/fedora-gnome-bootc-ewt`** by default; the
+Forgejo runner does the build + push. **No GitHub Actions.**
 
 ## Layout
 
@@ -15,6 +15,7 @@ built locally, on the VPS, or by a Forgejo Actions runner. **No GitHub Actions.*
 Containerfile              # Single source of truth. buildah / podman / kaniko.
 files/
   system/                  # /etc + /usr overlay (tlp.conf, presets, …)
+  bootc/install/           # bootc install-time kargs drop-ins (TOML)
   forgejo-runner/          # Runner binary + unit + post-rebase setup
   scripts/                 # One-shot post-rebase helpers (setup-libvirt.sh)
 build/
@@ -22,19 +23,32 @@ build/
   install-flatpaks.sh      # Post-rebase flatpak installer (idempotent)
   flatpak-list.txt         # Manifest read by install-flatpaks.sh
 .forgejo/workflows/build.yml  # CI on your Forgejo runner
-```
 
 ## Build
 
-Local or VPS (root or rootless buildah both work):
+Local or VPS (root or rootless buildah both work). Default registry is
+`ghcr.io`; override via env (see table below):
 
 ```bash
-./build/build.sh                       # image only
-./build/build.sh --push                # build + push to quay.io/ewt-lab
-FEDORA_VERSION=45 ./build/build.sh     # override silverblue tag
+./build/build.sh                                # build only
+./build/build.sh --push                         # build + push to ghcr.io/ewt-lab
+FEDORA_VERSION=45 ./build/build.sh --push       # override silverblue tag
+REGISTRY=quay.io REGISTRY_NAMESPACE=ewt-lab \
+  ./build/build.sh --push                       # push to Quay instead
 ```
 
 The raw `buildah` command is documented at the top of `Containerfile`.
+
+### Auth for `--push`
+
+`build.sh --push` calls `podman login` for you:
+
+- **Env vars (CI):** set `REGISTRY_USER` + `REGISTRY_TOKEN` (GHCR PAT with
+  `write:packages`, or a Quay robot account) and login is non-interactive.
+- **Interactive (local):** with no env vars and a TTY, you'll be prompted
+  for username + password / token.
+- **No creds + no TTY:** the script exits with a clear error rather than
+  pushing an unauthenticated request.
 
 ### Forgejo runner
 
@@ -43,15 +57,16 @@ on a self-hosted runner. Required secrets (configure per Forgejo repo):
 
 | Variable | Purpose |
 | --- | --- |
-| `REGISTRY_USER` | Registry username (e.g. `ewt-lab+robot`) |
-| `REGISTRY_TOKEN` | Registry password / PAT |
+| `REGISTRY_USER` | Registry username (e.g. your GitHub handle, or `ewt-lab+robot` on Quay) |
+| `REGISTRY_TOKEN` | GHCR PAT (`write:packages`) or Quay robot token |
 
 Required `vars` (optional; defaults shown):
 
 | Variable | Default |
 | --- | --- |
 | `FEDORA_VERSION` | `44` |
-| `REGISTRY` | `quay.io/ewt-lab` |
+| `REGISTRY` | `ghcr.io` |
+| `REGISTRY_NAMESPACE` | `ewt-lab` |
 | `IMAGE` | `fedora-gnome-bootc-ewt` |
 
 ## Install / rebase
@@ -62,13 +77,12 @@ Required `vars` (optional; defaults shown):
 
 From an existing Fedora Atomic install:
 
-```bash
 # 1. Unsigned rebase — pulls the signing key + policy on the way.
-sudo rpm-ostree rebase ostree-unverified-registry:quay.io/ewt-lab/fedora-gnome-bootc-ewt:44
+sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/ewt-lab/fedora-gnome-bootc-ewt:44
 sudo systemctl reboot
 
 # 2. Signed rebase.
-sudo rpm-ostree rebase ostree-image-signed:docker://quay.io/ewt-lab/fedora-gnome-bootc-ewt:44
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/ewt-lab/fedora-gnome-bootc-ewt:44
 sudo systemctl reboot
 ```
 
@@ -93,15 +107,25 @@ orchestrator. The cosmic repo can keep its BlueBuild recipe (recipe-gnome.yml
 + recipe.yml); this repo stays independent.
 
 ## Customizations vs. stock silverblue
-
-- Same dnf package list as `fedora-cosmic-atomic-ewt/recipes/recipe-gnome.yml`
-  (minus docker-ce; podman-docker shim added so the runner's docker CLI calls
-  hit the podman socket).
 - Podman as the container runtime (rootless via `podman.socket`). The
   Forgejo Actions runner's `DOCKER_HOST` env points at
   `unix:///run/user/<UID>/podman/podman.sock`.
 - Forgejo Actions runner pre-staged (operator runs setup script).
-- AMD GPU stability kargs baked in (`amdgpu.gpu_recovery=1`,
-  `amdgpu.ppfeaturemask=0xffffffff`).
+- AMD GPU stability kargs baked in via bootc install config
+  (`files/bootc/install/00-amdgpu.toml`, applied at `bootc install` time):
+  `amdgpu.gpu_recovery=1`, `amdgpu.ppfeaturemask=0xffffffff`.
 - TLP defaults for laptop battery care
 - Flatpaks: Firefox, Flatseal, FreeTube, Zed, Zen
+
+## Build mechanism
+
+Package install uses `dnf5 install/remove` against the silverblue base, not
+`rpm-ostree install/override remove/kargs`. `rpm-ostree install` is a client-side
+command meant for booted systems; it does not reliably work inside `buildah bud`
+(see [coreos/rpm-ostree#3738](https://github.com/coreos/rpm-ostree/issues/3738))
+even on ostree hosts. dnf5 has shipped on Atomic Desktops since Fedora 41 and is
+the supported build-time tool per
+[Changes/DNFAndBootcInImageModeFedora](https://fedoraproject.org/wiki/Changes/DNFAndBootcInImageModeFedora).
+AMD GPU kargs live in a bootc install config drop-in (applied at `bootc install`
+time) instead of being mutated via `rpm-ostree kargs`. The build ends with
+`bootc container lint`.

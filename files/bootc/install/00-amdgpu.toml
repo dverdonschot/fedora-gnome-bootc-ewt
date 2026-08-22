@@ -1,0 +1,18 @@
+# AMD GPU stability kargs — applied at `bootc install` time.
+#
+# - amdgpu.gpu_recovery=1
+#     When the GPU hangs, attempt a soft reset instead of freezing the kernel.
+#     Critical for suspend/resume stability on RDNA / RDNA2 / RDNA3 silicon.
+#
+# - amdgpu.ppfeaturemask=0xffffffff
+#     Unlock every power-play feature bit so driver tools (and the kernel itself)
+#     can raise clocks / voltages. Without this, the card sticks at low clocks
+#     and you get garbage performance in GPU-bound workloads.
+#
+# These replace the `rpm-ostree kargs --append=...` calls the Containerfile
+# used to make. rpm-ostree kargs is broken inside `buildah bud` (see
+# coreos/rpm-ostree#3738); the bootc install drop-in is the supported way to
+# bake kargs into a bootc image.
+
+[install]
+kargs = ["amdgpu.gpu_recovery=1", "amdgpu.ppfeaturemask=0xffffffff"]
