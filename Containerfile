@@ -60,14 +60,26 @@ gpgkey=https://download.copr.fedorainfracloud.org/results/aquacash5/nerd-fonts/p
 EOF
 
 # ---- Packages ----
-# dnf5 ships on silverblue since Fedora 41. /var/cache and /tmp as cache/tmpfs
+# dnf5 ships on silverblue since Fedora 41. /var/cache and /var/log as cache
 # mounts match the upstream uBlue / bootc container-build pattern and keep the
 # resulting image layer clean (see bootc docs + ublue-os/main Containerfile).
 # No --disablerepo=fedora-{modular,devel} hack needed; silverblue doesn't enable
 # them by default and the base image already only pulls what it needs.
+#
+# Note: do NOT add `--mount=type=tmpfs,dst=/tmp` here. The base silverblue
+# image already provides /tmp as a root-owned, mode-1777 tmpfs (see systemd
+# tmpfiles.d defaults), which is exactly what librepo needs for its
+# `mkstemp('/tmp/librepo-tmp-XXXXXX')` calls. Replacing that with a BuildKit
+# tmpfs mount breaks rootless buildah on a Silverblue host: the new tmpfs
+# inherits the host-builder's UID and root inside the container then fails
+# `mkstemp` with EACCES (containers/buildah#1240 — observed symptom:
+# `Cannot create temporary file - mkstemp '/tmp/librepo-tmp-XXXXXX':
+# Permission denied`). The CI runner is privileged and runs as root, which is
+# why the same Containerfile builds fine in Forgejo but fails on a host
+# `sudo buildah bud --isolation=chroot` invocation. /var/cache stays mounted
+# because that is the real cache hot path dnf5 also writes to.
 RUN --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
-    --mount=type=tmpfs,dst=/tmp \
     set -euxo pipefail; \
     # Drop Firefox from the silverblue base. dnf5 remove on a derived layer
     # replaces the base package cleanly (the upstream Fedora bootc / ublue
