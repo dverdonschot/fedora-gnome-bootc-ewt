@@ -9,7 +9,7 @@
 # Env vars:
 #   FEDORA_VERSION       (default 44)                       — silverblue tag
 #   REGISTRY             (default ghcr.io)                  — registry host
-#   REGISTRY_NAMESPACE   (default ewt-lab)                  — owner / org under REGISTRY
+#   REGISTRY_NAMESPACE   (default dverdonschot)             — owner / org under REGISTRY
 #   IMAGE                (default fedora-gnome-bootc-ewt)
 #   PLATFORM             (default linux/amd64)
 #   REGISTRY_USER        (optional; non-interactive login)
@@ -25,7 +25,7 @@ set -euo pipefail
 
 FEDORA_VERSION="${FEDORA_VERSION:-44}"
 REGISTRY="${REGISTRY:-ghcr.io}"
-REGISTRY_NAMESPACE="${REGISTRY_NAMESPACE:-ewt-lab}"
+REGISTRY_NAMESPACE="${REGISTRY_NAMESPACE:-dverdonschot}"
 IMAGE="${IMAGE:-fedora-gnome-bootc-ewt}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 

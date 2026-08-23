@@ -7,17 +7,17 @@
 #   sudo buildah bud \
 #     --isolation=chroot \
 #     --build-arg FEDORA_VERSION=44 \
-#     -t quay.io/ewt-lab/fedora-gnome-bootc-ewt:44 \
+#     -t ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44 \
 #     -f Containerfile .
 #
 # The resulting image is an ostree-native-container; install it with:
-#
+# (substitute /dev/sda with your target disk):
 #   sudo bootc install to-disk --filesystem=xfs \
-#       ostree-unverified-registry:quay.io/ewt-lab/fedora-gnome-bootc-ewt:44 /dev/sda
+#       ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44 /dev/sda
 #
 # …or rebase an existing Fedora Atomic install to it:
 #
-#   sudo rpm-ostree rebase ostree-unverified-registry:quay.io/ewt-lab/fedora-gnome-bootc-ewt:44
+#   sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
 #
 # Notes:
 # - Fedora Atomic puts every package in /usr; /usr/local is a symlink to /var/usrlocal

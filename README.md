@@ -6,7 +6,7 @@ GPU kargs as [fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-c
 — the desktop is the only difference. **Container runtime is podman** (with the
 `podman-docker` shim so the Forgejo runner's `docker` calls land on podman).
 This repo lives at `forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt`. The image
-is published to **`ghcr.io/ewt-lab/fedora-gnome-bootc-ewt`** by default; the
+is published to **`ghcr.io/dverdonschot/fedora-gnome-bootc-ewt`** by default; the
 Forgejo runner does the build + push. **No GitHub Actions.**
 
 ## Layout
@@ -31,9 +31,9 @@ Local or VPS (root or rootless buildah both work). Default registry is
 
 ```bash
 ./build/build.sh                                # build only
-./build/build.sh --push                         # build + push to ghcr.io/ewt-lab
+./build/build.sh --push                         # build + push to ghcr.io/dverdonschot
 FEDORA_VERSION=45 ./build/build.sh --push       # override silverblue tag
-REGISTRY=quay.io REGISTRY_NAMESPACE=ewt-lab \
+REGISTRY=quay.io REGISTRY_NAMESPACE=dverdonschot \
   ./build/build.sh --push                       # push to Quay instead
 ```
 
@@ -56,8 +56,7 @@ The included `.forgejo/workflows/build.yml` runs the same `build.sh --push`
 on a self-hosted runner. Required secrets (configure per Forgejo repo):
 
 | Variable | Purpose |
-| --- | --- |
-| `REGISTRY_USER` | Registry username (e.g. your GitHub handle, or `ewt-lab+robot` on Quay) |
+| `REGISTRY_USER` | Registry username (e.g. your GitHub handle, or `dverdonschot+robot` on Quay) |
 | `REGISTRY_TOKEN` | GHCR PAT (`write:packages`) or Quay robot token |
 
 Required `vars` (optional; defaults shown):
@@ -66,7 +65,7 @@ Required `vars` (optional; defaults shown):
 | --- | --- |
 | `FEDORA_VERSION` | `44` |
 | `REGISTRY` | `ghcr.io` |
-| `REGISTRY_NAMESPACE` | `ewt-lab` |
+| `REGISTRY_NAMESPACE` | `dverdonschot` |
 | `IMAGE` | `fedora-gnome-bootc-ewt` |
 
 ## Install / rebase
@@ -78,11 +77,11 @@ Required `vars` (optional; defaults shown):
 From an existing Fedora Atomic install:
 
 # 1. Unsigned rebase — pulls the signing key + policy on the way.
-sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/ewt-lab/fedora-gnome-bootc-ewt:44
+sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
 sudo systemctl reboot
 
 # 2. Signed rebase.
-sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/ewt-lab/fedora-gnome-bootc-ewt:44
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
 sudo systemctl reboot
 ```
 

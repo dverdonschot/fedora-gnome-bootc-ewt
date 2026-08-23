@@ -17,7 +17,7 @@ jobs:
     env:
       FEDORA_VERSION: ${{ vars.FEDORA_VERSION || '44' }}
       REGISTRY: ${{ vars.REGISTRY || 'ghcr.io' }}
-      REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE || 'ewt-lab' }}
+      REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE || 'dverdonschot' }}
       IMAGE: ${{ vars.IMAGE || 'fedora-gnome-bootc-ewt' }}
     steps:
       - name: checkout
