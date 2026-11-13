@@ -94,7 +94,6 @@ RUN --mount=type=cache,dst=/var/cache \
         python3 \
         python3-pip \
         uv \
-        neovim \
         vim-minimal \
         tmux \
         oh-my-posh \
@@ -103,15 +102,12 @@ RUN --mount=type=cache,dst=/var/cache \
         gcc \
         gcc-c++ \
         pkgconf \
-        python3-devel \
         # Basic nix commands (nix shell/profile/run) for ad-hoc app installs.
         # nix-daemon ships nix-daemon.socket/.service; the nix-system subpackage
         # provides sysusers.d/nix.conf (nixbld users, created at boot).
         nix \
         nix-daemon \
         ollama \
-        clang \
-        llvm \
         ranger \
         make \
         rust \
@@ -125,10 +121,8 @@ RUN --mount=type=cache,dst=/var/cache \
         libvirt-daemon-config-network \
         libvirt-daemon-kvm \
         qemu-kvm \
-        qemu \
         virt-manager \
         virt-install \
-        virt-viewer \
         kubernetes-client \
         helm \
         nmap \
@@ -136,7 +130,6 @@ RUN --mount=type=cache,dst=/var/cache \
         wireshark \
         btop \
         iotop \
-        iftop \
         nethogs \
         sysstat \
         strace \
@@ -148,10 +141,8 @@ RUN --mount=type=cache,dst=/var/cache \
         hwinfo \
         linuxconsoletools \
         waydroid \
-        dkms \
         tesseract \
         tesseract-langpack-nld \
-        net-tools \
         traceroute \
         node_exporter; \
     dnf5 clean all; \
@@ -191,18 +182,14 @@ RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirt
         /usr/local/bin/setup-libvirt.sh && \
     ostree container commit
 
-# ---- Flatpaks (baked into the image) ----
-# Install the system flatpaks at build time so a fresh `bootc install` is
-# complete without a post-rebase step. The list file stays the single source
-# of truth (same set as the cosmic repo's default-flatpaks). Silverblue ships
-# the flathub remote; add it defensively for bare install targets.
-COPY build/flatpak-list.txt /tmp/flatpak-list.txt
-RUN --mount=type=cache,dst=/var/cache \
-    flatpak remote-add --if-not-exists --system flathub \
-        https://dl.flathub.org/repo/flathub.flatpakrepo && \
-    xargs -r -a /tmp/flatpak-list.txt flatpak install --system -y --noninteractive flathub && \
-    rm /tmp/flatpak-list.txt && \
-    ostree container commit
+# ---- Flatpaks (manifest only; installed by build/install-flatpaks.sh) ----
+# NOT baked into the image: flatpaks live in /var, which bootc only seeds from
+# the image on first install and never updates on upgrade — a baked copy would
+# be frozen at build-day versions and would not even arrive on a rebase.
+# flatpak-list.txt is the single source of truth; install (or refresh) with:
+#   ./build/install-flatpaks.sh        (idempotent, run as your user)
+# Firefox is already a system flatpak in the silverblue base.
+COPY build/flatpak-list.txt /usr/share/fedora-gnome-bootc-ewt/flatpak-list.txt
 
 # ---- Lint ----
 # Validates that the resulting image is a well-formed bootc / ostree-native-

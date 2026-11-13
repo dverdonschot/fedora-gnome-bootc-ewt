@@ -1,4 +1,6 @@
-# System flatpaks layered on first boot by build/install-flatpaks.sh.
+# System flatpaks — single source of truth, installed by
+# build/install-flatpaks.sh (idempotent; NOT baked into the bootc image,
+# see Containerfile "Flatpaks" section).
 # Matches the cosmic repo's recipe.yml default-flatpaks configuration.
 org.mozilla.firefox
 com.github.tchx84.Flatseal

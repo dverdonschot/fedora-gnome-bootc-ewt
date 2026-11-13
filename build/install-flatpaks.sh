@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # build/install-flatpaks.sh — install system flatpaks listed in
-# build/flatpak-list.txt after a fresh rebase. Idempotent.
+# build/flatpak-list.txt. Idempotent; primary install path (flatpaks are NOT
+# baked into the image — /var is only seeded on first install and never
+# updated by bootc upgrades).
 set -euo pipefail
 
-LIST="$(cd "$(dirname "$0")" && cat flatpak-list.txt)"
+LIST="$(cd "$(dirname "$0")" && grep -v '^#' flatpak-list.txt | grep -v '^$')"
 
 # Ensure flathub remote exists.
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo

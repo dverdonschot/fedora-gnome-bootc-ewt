@@ -50,7 +50,9 @@ from upstream docs). Keep this list short — only what we actually rely on.
    the full lint.
 3. `/usr/local` is a symlink to `/var/usrlocal` on Fedora Atomic — COPY files
    into it one-by-one; recursive COPY refuses to replace the symlink.
-4. `flatpak install` at build time needs network; keep `/var/lib/flatpak` out
-   of cache/tmpfs mounts or the install is discarded.
+4. Flatpaks are deliberately **not** baked into the image: they live in
+   `/var`, which bootc only seeds on first install and never updates on
+   upgrade — baked copies would freeze at build-day versions and miss rebases.
+   `build/flatpak-list.txt` + `build/install-flatpaks.sh` is the flow.
 5. Fedora `nix` + `nix-daemon` rpms ship `nix-daemon.socket/.service` and
    `sysusers.d/nix.conf`; preset the units in the image, users appear at boot.

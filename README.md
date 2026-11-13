@@ -94,17 +94,19 @@ One-time, as your normal user:
 systemctl --user enable --now podman.socket   # activate the per-user podman socket
 /usr/local/bin/setup-forgejo-runner.sh --enable   # if you want CI on this box
 /usr/local/bin/setup-libvirt.sh                  # if you use virt-manager
+./build/install-flatpaks.sh                      # system flatpaks (see Flatpaks)
 ```
 
 ## Flatpaks
 
-Firefox, Flatseal, FreeTube, Zed, Zen — baked into the image at build time
-(`build/flatpak-list.txt` is the single source of truth; same set as the
-cosmic repo's `default-flatpaks`).
+Firefox, Flatseal, FreeTube, Zed, Zen — **not baked into the image**. Flatpaks
+live in `/var`, which bootc only seeds from the image on first install and
+never touches on upgrade: a baked copy would be frozen at build-day versions
+and wouldn't arrive on a rebase either. `build/flatpak-list.txt` is the single
+source of truth (same set as the cosmic repo's `default-flatpaks`); Firefox is
+already a system flatpak in the silverblue base.
 
-bootc caveat: `/var` content (where flatpaks live) is only seeded from the
-image on **first install**. On a **rebase** of an existing system, run the
-idempotent installer once if the flatpaks are missing:
+After rebase/install, run once as your user (idempotent):
 
 ```bash
 ./build/install-flatpaks.sh
@@ -134,7 +136,7 @@ instead so it becomes part of the atomic image.
 - libvirt/KVM preset (`80-virtualization.preset`), virt-manager, qemu-kvm.
 - Nix + nix-daemon for ad-hoc package installs.
 - AMD GPU stability kargs via bootc install config (see Kernel args above).
-- Flatpaks baked in (see Flatpaks above).
+- Flatpaks via manifest + idempotent script (see Flatpaks above).
 - `node_exporter` enabled.
 
 ## Build mechanism
