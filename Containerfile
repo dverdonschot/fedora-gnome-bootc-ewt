@@ -174,8 +174,12 @@ COPY files/bootc/install/00-amdgpu.toml /usr/lib/bootc/install/00-amdgpu.toml
 # libvirt preset is in files/system/usr/lib/systemd/system-preset/. Re-apply the
 # preset so the libvirt units ship enabled by default for the user. Podman is
 # already socket-activated by systemd in the base image; no preset work needed.
+# ---- Systemd preset + enable ----
+# libvirt + nix presets are in files/system/usr/lib/systemd/system-preset/.
+# No || true here: if a unit name changes upstream, fail the build loudly
+# instead of shipping a silently disabled daemon.
 RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket \
-        nix-daemon.socket nix-daemon.service 2>/dev/null || true && \
+        nix-daemon.socket nix-daemon.service && \
     systemctl enable node_exporter.service && \
     chmod 0755 \
         /usr/local/bin/setup-forgejo-runner.sh \
