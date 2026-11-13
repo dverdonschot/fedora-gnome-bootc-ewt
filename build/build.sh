@@ -7,11 +7,13 @@
 #   FEDORA_VERSION=45 ./build/build.sh --push
 #
 # Env vars:
-#   FEDORA_VERSION       (default 44)                       — silverblue tag
+#   FEDORA_VERSION       (default 45)                       — silverblue tag
 #   REGISTRY             (default ghcr.io)                  — registry host
 #   REGISTRY_NAMESPACE   (default dverdonschot)             — owner / org under REGISTRY
 #   IMAGE                (default fedora-gnome-bootc-ewt)
 #   PLATFORM             (default linux/amd64)
+#   LINT_SKIP            (default --skip=var-tmpfiles)      — set empty for full lint
+#                        (see Containerfile lint section: IMA EACCES on Fedora hosts)
 #   REGISTRY_USER        (optional; non-interactive login)
 #   REGISTRY_TOKEN       (optional; non-interactive login; GHCR PAT, Quay robot, …)
 #
@@ -23,7 +25,8 @@
 
 set -euo pipefail
 
-FEDORA_VERSION="${FEDORA_VERSION:-44}"
+FEDORA_VERSION="${FEDORA_VERSION:-45}"
+LINT_SKIP="${LINT_SKIP:---skip=var-tmpfiles}"
 REGISTRY="${REGISTRY:-ghcr.io}"
 REGISTRY_NAMESPACE="${REGISTRY_NAMESPACE:-dverdonschot}"
 IMAGE="${IMAGE:-fedora-gnome-bootc-ewt}"
@@ -43,6 +46,7 @@ buildah bud \
     --isolation=chroot \
     --platform="${PLATFORM}" \
     --build-arg "FEDORA_VERSION=${FEDORA_VERSION}" \
+    --build-arg "LINT_SKIP=${LINT_SKIP}" \
     --tag "${FULL_IMAGE}" \
     --file Containerfile \
     "${ROOT}"

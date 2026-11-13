@@ -2,22 +2,22 @@
 #
 # fedora-gnome-bootc-ewt — Fedora Atomic GNOME image with personal customizations.
 #
-# Build (local / VPS / Forgejo runner all use the same command):
-#
-#   sudo buildah bud \
-#     --isolation=chroot \
-#     --build-arg FEDORA_VERSION=44 \
-#     -t ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44 \
+# Build (local / VPS — CI uses .github/workflows/build.yml):
+#   ./build/build.sh
+# which runs:
+#   buildah bud --isolation=chroot \
+#     --build-arg FEDORA_VERSION=45 \
+#     -t ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45 \
 #     -f Containerfile .
 #
 # The resulting image is an ostree-native-container; install it with:
 # (substitute /dev/sda with your target disk):
 #   sudo bootc install to-disk --filesystem=xfs \
-#       ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44 /dev/sda
+#       ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45 /dev/sda
 #
 # …or rebase an existing Fedora Atomic install to it:
 #
-#   sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
+#   sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45
 #
 # Notes:
 # - Fedora Atomic puts every package in /usr; /usr/local is a symlink to /var/usrlocal
@@ -30,9 +30,9 @@
 #   container builds (see coreos/rpm-ostree#3738); the bootc install config is the
 #   future-proof replacement.
 # - Container runtime is `podman-docker`: the `podman-docker` package provides a
-#   `/usr/bin/docker` shim that calls `podman`. The Forgejo Actions runner shells
-#   out to `/usr/bin/docker`, so the shim keeps it working without docker-ce.
-#   Podman is already in the silverblue base; we add the shim and nothing else.
+#   `/usr/bin/docker` shim that calls `podman`. Tools and CI that shell out to
+#   `/usr/bin/docker` keep working without docker-ce. Podman is already in the
+#   silverblue base; we add the shim and nothing else.
 # - Package install uses `dnf5 install/remove` against the silverblue base image,
 #   not `rpm-ostree install/override remove`. `rpm-ostree install` is a client-side
 #   command meant for booted systems; it does not reliably work inside `buildah bud`
@@ -41,11 +41,12 @@
 #   since Fedora 41 and is the supported build-time tool (Changes/DNFAndBootcInImage
 #   ModeFedora).
 
-ARG FEDORA_VERSION=44
+ARG FEDORA_VERSION=45
 
 FROM quay.io/fedora-ostree-desktops/silverblue:${FEDORA_VERSION}
 
-ARG FEDORA_VERSION=44
+ARG FEDORA_VERSION=45
+ARG LINT_SKIP=--skip=var-tmpfiles
 
 # ---- Repos ----
 # nerd-fonts COPR for hack-nerd-fonts / oh-my-posh. Podman is in the base
@@ -103,12 +104,14 @@ RUN --mount=type=cache,dst=/var/cache \
         gcc-c++ \
         pkgconf \
         python3-devel \
-        dbus-devel \
+        # Basic nix commands (nix shell/profile/run) for ad-hoc app installs.
+        # nix-daemon ships nix-daemon.socket/.service; the nix-system subpackage
+        # provides sysusers.d/nix.conf (nixbld users, created at boot).
+        nix \
+        nix-daemon \
         ollama \
         clang \
         llvm \
-        llvm-devel \
-        mesa-libOpenCL-devel \
         ranger \
         make \
         rust \
@@ -180,15 +183,26 @@ COPY files/bootc/install/00-amdgpu.toml /usr/lib/bootc/install/00-amdgpu.toml
 # libvirt preset is in files/system/usr/lib/systemd/system-preset/. Re-apply the
 # preset so the libvirt units ship enabled by default for the user. Podman is
 # already socket-activated by systemd in the base image; no preset work needed.
-RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket 2>/dev/null || true && \
+RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket \
+        nix-daemon.socket nix-daemon.service 2>/dev/null || true && \
     systemctl enable node_exporter.service && \
     chmod 0755 \
         /usr/local/bin/setup-forgejo-runner.sh \
         /usr/local/bin/setup-libvirt.sh && \
     ostree container commit
 
-# ---- Flatpaks (manifest only; applied at first boot by a generated unit) ----
-COPY build/flatpak-list.txt /usr/share/fedora-gnome-bootc-ewt/flatpak-list.txt
+# ---- Flatpaks (baked into the image) ----
+# Install the system flatpaks at build time so a fresh `bootc install` is
+# complete without a post-rebase step. The list file stays the single source
+# of truth (same set as the cosmic repo's default-flatpaks). Silverblue ships
+# the flathub remote; add it defensively for bare install targets.
+COPY build/flatpak-list.txt /tmp/flatpak-list.txt
+RUN --mount=type=cache,dst=/var/cache \
+    flatpak remote-add --if-not-exists --system flathub \
+        https://dl.flathub.org/repo/flathub.flatpakrepo && \
+    xargs -r -a /tmp/flatpak-list.txt flatpak install --system -y --noninteractive flathub && \
+    rm /tmp/flatpak-list.txt && \
+    ostree container commit
 
 # ---- Lint ----
 # Validates that the resulting image is a well-formed bootc / ostree-native-
@@ -219,9 +233,12 @@ COPY build/flatpak-list.txt /usr/share/fedora-gnome-bootc-ewt/flatpak-list.txt
 # touches nothing under /var, and dnf5 installs land in /usr. So skipping
 # this specific lint loses no real safety on this image. File an upstream
 # issue when this becomes annoying enough.
-RUN bootc container lint --skip=var-tmpfiles
+#
+# LINT_SKIP defaults to --skip=var-tmpfiles (host builds with IMA). CI on
+# GitHub runners runs the full lint: --build-arg LINT_SKIP= .
+RUN bootc container lint ${LINT_SKIP}
 
 LABEL org.opencontainers.image.title="fedora-gnome-bootc-ewt" \
-      org.opencontainers.image.description="Fedora Atomic GNOME image with personal customizations" \
-      org.opencontainers.image.source="https://forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt" \
+      org.opencontainers.image.description="Fedora 45 GNOME bootc image with personal customizations" \
+      org.opencontainers.image.source="https://github.com/dverdonschot/fedora-gnome-bootc-ewt" \
       org.opencontainers.image.licenses="Apache-2.0"

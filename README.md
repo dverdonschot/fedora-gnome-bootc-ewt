@@ -1,72 +1,59 @@
 # fedora-gnome-bootc-ewt
 
-A custom Fedora Atomic image built on the official GNOME desktop (`silverblue`),
-configured for personal use. Same package list, same forgejo-runner, same AMD
-GPU kargs as [fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-cosmic-atomic-ewt)
+A custom Fedora 45 GNOME bootc image, configured for personal use. Same package
+list, same forgejo-runner, same AMD GPU kargs as
+[fedora-cosmic-atomic-ewt](https://github.com/dverdonschot/fedora-cosmic-atomic-ewt)
 — the desktop is the only difference. **Container runtime is podman** (with the
-`podman-docker` shim so the Forgejo runner's `docker` calls land on podman).
-This repo lives at `forge.ewt-lab.dev/ewt-lab/fedora-gnome-bootc-ewt`. The image
-is published to **`ghcr.io/dverdonschot/fedora-gnome-bootc-ewt`** by default; the
-Forgejo runner does the build + push. **No GitHub Actions.**
+`podman-docker` shim so anything that calls `docker` lands on podman).
+
+Lives at `github.com/dverdonschot/fedora-gnome-bootc-ewt`; published to
+**`ghcr.io/dverdonschot/fedora-gnome-bootc-ewt`** by GitHub Actions (weekly
+scheduled rebuild + push/tag builds), cosign-signed keylessly. Bootc image
+reference notes: [docs/bootc-doc-index.md](docs/bootc-doc-index.md).
 
 ## Layout
 
 ```
-Containerfile              # Single source of truth. buildah / podman / kaniko.
+Containerfile                    # Single source of truth
 files/
-  system/                  # /etc + /usr overlay (tlp.conf, presets, …)
-  bootc/install/           # bootc install-time kargs drop-ins (TOML)
-  forgejo-runner/          # Runner binary + unit + post-rebase setup
-  scripts/                 # One-shot post-rebase helpers (setup-libvirt.sh)
+  system/                        # /usr overlay (presets, sysusers)
+  bootc/install/                 # bootc install-time kargs drop-ins (TOML)
+  forgejo-runner/                # Runner unit + post-rebase setup
+  scripts/                       # One-shot post-rebase helpers
 build/
-  build.sh                 # `buildah bud` wrapper (local + VPS + runner)
-  install-flatpaks.sh      # Post-rebase flatpak installer (idempotent)
-  flatpak-list.txt         # Manifest read by install-flatpaks.sh
-.forgejo/workflows/build.yml  # CI on your Forgejo runner
+  build.sh                       # `buildah bud` wrapper (local + VPS + CI)
+  install-flatpaks.sh            # Flatpak installer (idempotent; see Flatpaks)
+  flatpak-list.txt               # Flatpak manifest, read at build time
+.github/workflows/build.yml      # CI: build, lint, push, sign
+docs/bootc-doc-index.md          # Curated bootc references + local lessons
+```
 
 ## Build
-
-Local or VPS (root or rootless buildah both work). Default registry is
-`ghcr.io`; override via env (see table below):
 
 ```bash
 ./build/build.sh                                # build only
 ./build/build.sh --push                         # build + push to ghcr.io/dverdonschot
 FEDORA_VERSION=45 ./build/build.sh --push       # override silverblue tag
-REGISTRY=quay.io REGISTRY_NAMESPACE=dverdonschot \
-  ./build/build.sh --push                       # push to Quay instead
+LINT_SKIP= ./build/build.sh                     # full bootc container lint
 ```
 
+Env vars: `FEDORA_VERSION` (45), `REGISTRY` (ghcr.io), `REGISTRY_NAMESPACE`
+(dverdonschot), `IMAGE`, `PLATFORM` (linux/amd64), `LINT_SKIP`
+(`--skip=var-tmpfiles` — see the lint section in `Containerfile` for the IMA
+EACCES story on Fedora hosts). Auth for `--push`: `REGISTRY_USER` +
+`REGISTRY_TOKEN` (GHCR PAT with `write:packages`), else interactive prompt.
 The raw `buildah` command is documented at the top of `Containerfile`.
 
-### Auth for `--push`
+### CI
 
-`build.sh --push` calls `podman login` for you:
+`.github/workflows/build.yml` builds on push/PR and rebuilds weekly
+(Monday 04:30 UTC) so the image always tracks the latest `silverblue:45`.
+Push + signing happen only on `main`; PRs are build-only. Signing is cosign
+keyless (no repository secret needed) — verify with:
 
-- **Env vars (CI):** set `REGISTRY_USER` + `REGISTRY_TOKEN` (GHCR PAT with
-  `write:packages`, or a Quay robot account) and login is non-interactive.
-- **Interactive (local):** with no env vars and a TTY, you'll be prompted
-  for username + password / token.
-- **No creds + no TTY:** the script exits with a clear error rather than
-  pushing an unauthenticated request.
-
-### Forgejo runner
-
-The included `.forgejo/workflows/build.yml` runs the same `build.sh --push`
-on a self-hosted runner. Required secrets (configure per Forgejo repo):
-
-| Variable | Purpose |
-| `REGISTRY_USER` | Registry username (e.g. your GitHub handle, or `dverdonschot+robot` on Quay) |
-| `REGISTRY_TOKEN` | GHCR PAT (`write:packages`) or Quay robot token |
-
-Required `vars` (optional; defaults shown):
-
-| Variable | Default |
-| --- | --- |
-| `FEDORA_VERSION` | `44` |
-| `REGISTRY` | `ghcr.io` |
-| `REGISTRY_NAMESPACE` | `dverdonschot` |
-| `IMAGE` | `fedora-gnome-bootc-ewt` |
+```bash
+cosign verify ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45
+```
 
 ## Install / rebase
 
@@ -76,14 +63,28 @@ Required `vars` (optional; defaults shown):
 
 From an existing Fedora Atomic install:
 
-# 1. Unsigned rebase — pulls the signing key + policy on the way.
-sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
-sudo systemctl reboot
+  # 1. Unsigned rebase — pulls the signing key + policy on the way.
+  sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45
+  sudo systemctl reboot
 
-# 2. Signed rebase.
-sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:44
-sudo systemctl reboot
-```
+  # 2. Signed rebase.
+  sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45
+  sudo systemctl reboot
+
+Fresh disk install:
+
+  sudo bootc install to-disk --filesystem=xfs \
+    ostree-image-signed:docker://ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45 /dev/sdX
+
+### Kernel args
+
+The AMD GPU kargs (`amdgpu.gpu_recovery=1`, `amdgpu.ppfeaturemask=0xffffffff`,
+`files/bootc/install/00-amdgpu.toml`) apply at **`bootc install` time only**.
+On the `rpm-ostree rebase` path the current deployment's kernel args persist —
+apply them once manually if your system doesn't have them:
+
+  sudo rpm-ostree kargs --append=amdgpu.gpu_recovery=1 \
+    --append=amdgpu.ppfeaturemask=0xffffffff
 
 ## Post-rebase
 
@@ -93,38 +94,59 @@ One-time, as your normal user:
 systemctl --user enable --now podman.socket   # activate the per-user podman socket
 /usr/local/bin/setup-forgejo-runner.sh --enable   # if you want CI on this box
 /usr/local/bin/setup-libvirt.sh                  # if you use virt-manager
-./build/install-flatpaks.sh                      # layered flatpaks
 ```
 
-## Why not BlueBuild?
+## Flatpaks
 
-The cosmic repo uses [BlueBuild](https://blue-build.org) recipes, which are
-great but their hosted build path is GitHub Actions. Since this repo has no
-GH presence, a plain `Containerfile` is the boring choice: identical package
-list, identical systemd preset, identical scripts — just a different
-orchestrator. The cosmic repo can keep its BlueBuild recipe (recipe-gnome.yml
-+ recipe.yml); this repo stays independent.
+Firefox, Flatseal, FreeTube, Zed, Zen — baked into the image at build time
+(`build/flatpak-list.txt` is the single source of truth; same set as the
+cosmic repo's `default-flatpaks`).
+
+bootc caveat: `/var` content (where flatpaks live) is only seeded from the
+image on **first install**. On a **rebase** of an existing system, run the
+idempotent installer once if the flatpaks are missing:
+
+```bash
+./build/install-flatpaks.sh
+```
+
+## Nix
+
+The image ships the Fedora `nix` + `nix-daemon` packages with
+`nix-daemon.socket` preset-enabled; nixbld users come from
+`sysusers.d/nix.conf` (created at boot). Basic commands work out of the box:
+
+```bash
+nix shell nixpkgs#hello      # run an app without installing
+nix profile install nixpkgs#foo
+```
+
+Nix store lives in `/nix` (mutable, outside the bootc image) — installs
+survive reboots and rebases, and are intentionally *not* part of the image.
+For anything you use long-term, add it to the Containerfile package list
+instead so it becomes part of the atomic image.
 
 ## Customizations vs. stock silverblue
-- Podman as the container runtime (rootless via `podman.socket`). The
-  Forgejo Actions runner's `DOCKER_HOST` env points at
-  `unix:///run/user/<UID>/podman/podman.sock`.
+
+- Podman as the container runtime (rootless via `podman.socket`), plus the
+  `podman-docker` shim.
 - Forgejo Actions runner pre-staged (operator runs setup script).
-- AMD GPU stability kargs baked in via bootc install config
-  (`files/bootc/install/00-amdgpu.toml`, applied at `bootc install` time):
-  `amdgpu.gpu_recovery=1`, `amdgpu.ppfeaturemask=0xffffffff`.
-- TLP defaults for laptop battery care
-- Flatpaks: Firefox, Flatseal, FreeTube, Zed, Zen
+- libvirt/KVM preset (`80-virtualization.preset`), virt-manager, qemu-kvm.
+- Nix + nix-daemon for ad-hoc package installs.
+- AMD GPU stability kargs via bootc install config (see Kernel args above).
+- Flatpaks baked in (see Flatpaks above).
+- `node_exporter` enabled.
 
 ## Build mechanism
 
 Package install uses `dnf5 install/remove` against the silverblue base, not
-`rpm-ostree install/override remove/kargs`. `rpm-ostree install` is a client-side
-command meant for booted systems; it does not reliably work inside `buildah bud`
-(see [coreos/rpm-ostree#3738](https://github.com/coreos/rpm-ostree/issues/3738))
-even on ostree hosts. dnf5 has shipped on Atomic Desktops since Fedora 41 and is
-the supported build-time tool per
+`rpm-ostree install/override remove/kargs`. `rpm-ostree install` is a
+client-side command meant for booted systems; it does not reliably work inside
+`buildah bud` (see
+[coreos/rpm-ostree#3738](https://github.com/coreos/rpm-ostree/issues/3738))
+even on ostree hosts. dnf5 has shipped on Atomic Desktops since Fedora 41 and
+is the supported build-time tool per
 [Changes/DNFAndBootcInImageModeFedora](https://fedoraproject.org/wiki/Changes/DNFAndBootcInImageModeFedora).
-AMD GPU kargs live in a bootc install config drop-in (applied at `bootc install`
-time) instead of being mutated via `rpm-ostree kargs`. The build ends with
-`bootc container lint`.
+AMD GPU kargs live in a bootc install config drop-in (applied at
+`bootc install` time) instead of being mutated via `rpm-ostree kargs`. The
+build ends with `bootc container lint`.
