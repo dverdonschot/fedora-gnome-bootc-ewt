@@ -95,6 +95,7 @@ systemctl --user enable --now podman.socket   # activate the per-user podman soc
 /usr/local/bin/setup-forgejo-runner.sh --enable   # if you want CI on this box
 /usr/local/bin/setup-libvirt.sh                  # if you use virt-manager
 ./build/install-flatpaks.sh                      # system flatpaks (see Flatpaks)
+nix profile install --file nix/apps.nix          # CLI/dev toolchain (see Nix)
 ```
 
 ## Flatpaks
@@ -116,17 +117,35 @@ After rebase/install, run once as your user (idempotent):
 
 The image ships the Fedora `nix` + `nix-daemon` packages with
 `nix-daemon.socket` preset-enabled; nixbld users come from
-`sysusers.d/nix.conf` (created at boot). Basic commands work out of the box:
-
-```bash
-nix shell nixpkgs#hello      # run an app without installing
-nix profile install nixpkgs#foo
-```
+`sysusers.d/nix.conf` (created at boot).
 
 Nix store lives in `/nix` (mutable, outside the bootc image) — installs
 survive reboots and rebases, and are intentionally *not* part of the image.
-For anything you use long-term, add it to the Containerfile package list
-instead so it becomes part of the atomic image.
+The user-level CLI/dev toolchain (editors, compilers, language runtimes,
+monitoring, kubectl/helm, tesseract, …) is declared in
+[`nix/apps.nix`](nix/apps.nix) and applied after rebase:
+
+```bash
+# one-time: pin the nixpkgs channel apps.nix builds against
+nix-channel --add https://nixos.org/channels/nixos-25.11 nixpkgs
+nix-channel --update
+
+# apply the list (idempotent once profile is empty)
+nix profile install --file nix/apps.nix
+```
+
+Upgrade the toolchain without touching the image — no rebase, no reboot:
+
+```bash
+nix-channel --update && nix profile upgrade
+```
+
+**Rule of thumb for where a package lives:**
+`nix/apps.nix` — pure user-space CLI tools; update independently of the
+image. `Containerfile` — anything needing kernel modules, GPU access
+(rocm), a system daemon (ollama, node_exporter), a preset unit (libvirt),
+or the `podman-docker` shim. The image stays small; long-term tools do NOT
+go back into the Containerfile package list.
 
 ## Customizations vs. stock silverblue
 
@@ -134,7 +153,8 @@ instead so it becomes part of the atomic image.
   `podman-docker` shim.
 - Forgejo Actions runner pre-staged (operator runs setup script).
 - libvirt/KVM preset (`80-virtualization.preset`), virt-manager, qemu-kvm.
-- Nix + nix-daemon for ad-hoc package installs.
+- Nix + nix-daemon, with the user-level CLI/dev toolchain declared in
+  `nix/apps.nix` (see Nix above).
 - AMD GPU stability kargs via bootc install config (see Kernel args above).
 - Flatpaks via manifest + idempotent script (see Flatpaks above).
 - `node_exporter` enabled.

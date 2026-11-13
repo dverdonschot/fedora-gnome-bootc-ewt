@@ -49,16 +49,10 @@ ARG FEDORA_VERSION=45
 ARG LINT_SKIP=--skip=var-tmpfiles
 
 # ---- Repos ----
-# nerd-fonts COPR for hack-nerd-fonts / oh-my-posh. Podman is in the base
-# silverblue image; nothing to add on the repo front.
-RUN cat > /etc/yum.repos.d/_copr-aquacash5-nerd-fonts.repo <<EOF
-[copr:copr.fedorainfracloud.org:aquacash5:nerd-fonts]
-name=Copr repo for nerd-fonts owned by aquacash5
-baseurl=https://download.copr.fedorainfracloud.org/results/aquacash5/nerd-fonts/fedora-${FEDORA_VERSION}-\$basearch/
-enabled=1
-gpgcheck=1
-gpgkey=https://download.copr.fedorainfracloud.org/results/aquacash5/nerd-fonts/pubkey.gpg
-EOF
+# Nothing to add: podman is in the base silverblue image, and the CLI/dev
+# toolchain (oh-my-posh, hack-nerd-fonts included) is installed via nix from
+# nix/apps.nix — see README.md "Nix". Long-term tools stay out of the image
+# so they update independently of rebase.
 
 # ---- Packages ----
 # dnf5 ships on silverblue since Fedora 41. /var/cache and /var/log as cache
@@ -88,31 +82,12 @@ RUN --mount=type=cache,dst=/var/cache \
     # Changes/DNFAndBootcInImageModeFedora).
     rpm -q firefox >/dev/null && dnf5 -y remove firefox firefox-langpacks || true; \
     dnf5 -y install \
-        micro \
-        nodejs \
-        npm \
-        python3 \
-        python3-pip \
-        uv \
-        vim-minimal \
-        tmux \
-        oh-my-posh \
-        hack-nerd-fonts \
-        git \
-        gcc \
-        gcc-c++ \
-        pkgconf \
-        # Basic nix commands (nix shell/profile/run) for ad-hoc app installs.
-        # nix-daemon ships nix-daemon.socket/.service; the nix-system subpackage
-        # provides sysusers.d/nix.conf (nixbld users, created at boot).
+        # Nix package manager. User-level CLI/dev tools are installed from
+        # nix/apps.nix via `nix profile install --file nix/apps.nix` — not
+        # here. Anything needing kernel/GPU/daemon integration stays below.
         nix \
         nix-daemon \
         ollama \
-        ranger \
-        make \
-        rust \
-        cargo \
-        rustup \
         # adds a `/usr/bin/docker` → podman shim so the Forgejo runner
         # (which only knows how to call `docker`) keeps working without
         # pulling in docker-ce.
@@ -123,27 +98,15 @@ RUN --mount=type=cache,dst=/var/cache \
         qemu-kvm \
         virt-manager \
         virt-install \
-        kubernetes-client \
-        helm \
-        nmap \
-        nmap-ncat \
-        wireshark \
-        btop \
-        iotop \
-        nethogs \
-        sysstat \
-        strace \
         forgejo-runner \
         rocm-runtime \
         rocm-clinfo \
         rocm-opencl \
         rocminfo \
-        hwinfo \
+        # jstest/inputattach — not packaged in nixpkgs, and it's
+        # kernel-input (evdev/udev) adjacent anyway.
         linuxconsoletools \
         waydroid \
-        tesseract \
-        tesseract-langpack-nld \
-        traceroute \
         node_exporter; \
     dnf5 clean all; \
     rm -rf /var/cache/dnf5 /var/cache/rpm-ostree /var/lib/rpm-ostree-pending* 2>/dev/null || true; \
