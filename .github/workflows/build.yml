@@ -40,20 +40,20 @@ jobs:
       # GitHub runners are rootless podman users. The Containerfile is written
       # for that path (chroot isolation, no tmpfs /tmp, LINT_SKIP default).
       # buildah's local layer cache makes the --push invocation below cheap.
+      # Full lint on CI: LINT_SKIP= overrides the host default.
       - name: Build image
+        env:
+          LINT_SKIP: ""
         run: |
           ./build/build.sh
 
-      - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
+      # build.sh handles non-interactive `podman login` itself; login-action's
+      # docker config.json is not read by podman.
       - name: Push image
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./build/build.sh --push
 
