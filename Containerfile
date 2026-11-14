@@ -92,6 +92,7 @@ RUN --mount=type=cache,dst=/var/cache \
         # (which only knows how to call `docker`) keeps working without
         # pulling in docker-ce.
         podman-docker \
+        podman-compose \
         libvirt \
         libvirt-daemon-config-network \
         libvirt-daemon-kvm \
@@ -107,7 +108,11 @@ RUN --mount=type=cache,dst=/var/cache \
         # kernel-input (evdev/udev) adjacent anyway.
         linuxconsoletools \
         waydroid \
-        node_exporter; \
+        node_exporter \
+        # Layered on the client via rpm-ostree install; moved into the image
+        # so `bootc update` is no longer blocked by local modifications.
+        systemd-devel \
+        tailscale; \
     dnf5 clean all; \
     rm -rf /var/cache/dnf5 /var/cache/rpm-ostree /var/lib/rpm-ostree-pending* 2>/dev/null || true; \
     ostree container commit
