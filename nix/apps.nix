@@ -66,8 +66,4 @@ with pkgs; [
   # Kubernetes
   kubectl
   kubernetes-helm
-
-  # OCR — Dutch language data via the enableLanguages override
-  # (nixpkgs has no separate tesseract-langpack-nld attribute).
-  (tesseract.override { enableLanguages = [ "nld" ]; })
 ]
