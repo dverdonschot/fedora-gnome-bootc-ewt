@@ -11,3 +11,8 @@ enable nix-daemon.service
 
 # Enable podman socket for Docker-compatible API access
 # enable podman.socket
+
+# Tailscale was previously layered via rpm-ostree (which applies presets on
+# deploy); in the image, Fedora's 90-systemd.preset disable-by-default would
+# otherwise leave tailscaled down.
+enable tailscaled.service

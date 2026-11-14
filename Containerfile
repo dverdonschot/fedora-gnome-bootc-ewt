@@ -147,7 +147,7 @@ COPY files/bootc/install/00-amdgpu.toml /usr/lib/bootc/install/00-amdgpu.toml
 # No || true here: if a unit name changes upstream, fail the build loudly
 # instead of shipping a silently disabled daemon.
 RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket \
-        nix-daemon.socket nix-daemon.service && \
+        nix-daemon.socket nix-daemon.service tailscaled.service && \
     systemctl enable node_exporter.service && \
     chmod 0755 \
         /usr/local/bin/setup-forgejo-runner.sh \
