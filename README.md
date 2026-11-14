@@ -76,6 +76,11 @@ an update every day it is used, and boots the new deployment at the next
 power-on (`ostree-finalize-staged.service` does the small remaining work at
 shutdown).
 
+Bootstrap note: a machine still running an image built *before* this
+change has no timer yet, so it cannot fetch the image that enables it.
+Upgrade such a machine once by hand (`sudo rpm-ostree upgrade && reboot`);
+every deployment after that stages itself.
+
 Verify on a machine:
 
 ```bash
