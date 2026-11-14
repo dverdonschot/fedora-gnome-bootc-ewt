@@ -36,6 +36,12 @@ from upstream docs). Keep this list short — only what we actually rely on.
   rootless buildah (containers/buildah#1240 — EACCES on librepo mkstemp).
 - **Weekly scheduled rebuild** is the update mechanism for the base: the tag
   `silverblue:45` floats; CI pulls the new digest every Monday.
+- **Machine-side auto-update = config + timer.** `AutomaticUpdatePolicy=stage`
+  in the image's `/etc/rpm-ostreed.conf` plus a preset-enabled
+  `rpm-ostreed-automatic.timer` (preset files match lexicographically,
+  first match wins — ship it as `80-*.preset` to beat 90's `disable *`).
+  Stock cadence: `OnBootSec=1h`, `OnUnitInactiveSec=1d`. Verify with
+  `rpm-ostree status` → `AutomaticUpdates: stage`.
 - **Delta updates**: a rechunker (rpm-ostree rechunk / chunkah) shrinks
   upgrade payloads. Not used here yet — reconsider when upgrade bandwidth
   hurts.

@@ -55,6 +55,36 @@ keyless (no repository secret needed) — verify with:
 cosign verify ghcr.io/dverdonschot/fedora-gnome-bootc-ewt:45
 ```
 
+## Automatic updates
+
+The machine side ships enabled with the image (verified against upstream
+rpm-ostree docs and source, not README prose):
+
+- `files/system/etc/rpm-ostreed.conf` sets `AutomaticUpdatePolicy=stage`:
+  updates are downloaded and unpacked in the background and deploy at the
+  next boot. Not `apply` — that initiates the reboot itself.
+- `files/system/usr/lib/systemd/system-preset/80-automatic-updates.preset`
+  enables `rpm-ostreed-automatic.timer`. Preset matching is lexicographic
+  and first-match-wins, so the 80- file beats Fedora's 90-systemd.preset
+  catchall `disable *`; the build re-applies it with `systemctl preset`.
+
+Cadence comes from the stock timer unit (upstream
+`src/daemon/rpm-ostreed-automatic.timer`): `OnBootSec=1h` +
+`OnUnitInactiveSec=1d` — roughly an hour after boot, then daily while the
+machine is on. A workstation that is on a few hours a day therefore stages
+an update every day it is used, and boots the new deployment at the next
+power-on (`ostree-finalize-staged.service` does the small remaining work at
+shutdown).
+
+Verify on a machine:
+
+```bash
+rpm-ostree status     # header shows: AutomaticUpdates: stage; ...
+```
+
+Flatpaks and the nix toolchain are not part of this — they still update with
+`flatpak update` and `nix profile upgrade`.
+
 ## Install / rebase
 
 > [!WARNING]
@@ -158,6 +188,7 @@ go back into the Containerfile package list.
 - AMD GPU stability kargs via bootc install config (see Kernel args above).
 - Flatpaks via manifest + idempotent script (see Flatpaks above).
 - `node_exporter` enabled.
+- Automatic update staging enabled (stage policy + `rpm-ostreed-automatic.timer`, see Automatic updates).
 
 ## Build mechanism
 
