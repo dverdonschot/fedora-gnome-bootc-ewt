@@ -31,6 +31,7 @@ with pkgs; [
   oh-my-posh
   ranger
   nerd-fonts.hack
+  age
 
   # Languages & runtimes
   python3
