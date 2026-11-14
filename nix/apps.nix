@@ -33,17 +33,11 @@ with pkgs; [
   nerd-fonts.hack
 
   # Languages & runtimes
-  nodejs
-  nodejs.pkgs.npm
   python3
   python3Packages.pip
   uv
-  rustc
-  cargo
-  rustup
 
   # Compilers & build tools
-  gcc
   clang
   llvm
   gnumake
