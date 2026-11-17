@@ -191,8 +191,22 @@ go back into the Containerfile package list.
 - Nix + nix-daemon, with the user-level CLI/dev toolchain declared in
   `nix/apps.nix` (see Nix above).
 - AMD GPU stability kargs via bootc install config (see Kernel args above).
+- um790 idle-stability kargs (`processor.max_cstate=1`, `idle=nowait`) via a
+  second bootc install drop-in (`files/bootc/install/01-um790-idle.toml`), and
+  the USB-serial modules for microcontroller work via
+  `etc/modules-load.d/um790-serial.conf`.
+- `lact` (AMD GPU powertuning daemon), enabled via preset.
+- `node_exporter` enabled, with the systemd collector added via drop-in
+  (`node_systemd_unit_state` feeds the Container Health Grafana dashboard).
+- Log shipping baked in: `alloy` tails the persistent host journal and pushes
+  to `https://loki.tail5bbc4.ts.net/loki/api/v1/push`. Config is host-agnostic
+  (`constants.hostname` becomes the `host` label), journald is made persistent
+  via a `journald.conf.d` drop-in, and the unit gets the `systemd-journal`
+  supplementary group via a service drop-in. Ported from the NixOS pipeline in
+  `nixos-systems-configuration/modules/alloy-loki-shipper.nix-fn.nix` —
+  the `priority` label must NOT be renamed to `level` (see that module's
+  comment for why).
 - Flatpaks via manifest + idempotent script (see Flatpaks above).
-- `node_exporter` enabled.
 - Automatic update staging enabled (stage policy + `rpm-ostreed-automatic.timer`, see Automatic updates).
 
 ## Build mechanism
