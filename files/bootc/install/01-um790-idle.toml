@@ -1,0 +1,20 @@
+# um790 (Minisforum UM790 Pro) idle-stability kargs — applied at
+# `bootc install` time.
+#
+# - processor.max_cstate=1
+# - idle=nowait
+#
+# The UM790 reboots spontaneously when idling at deep C-states (the same
+# fix is carried in the NixOS config for this host,
+# nixos-systems-configuration/hosts/um790/configuration.nix, where the
+# comment reads "specific UM790 fix to prevent reboots when running
+# idle"). Pinning C-state 1 trades idle power for stability.
+#
+# Caveat: this image is shared with the workstation. On the rebase path
+# kargs are unchanged, so an existing workstation only picks these up on
+# a fresh `bootc install`; on a fresh install the workstation pays a
+# little idle power for a fix it does not need.
+#
+# See 00-amdgpu.toml for why kargs live in bootc install drop-ins.
+[install]
+kargs = ["processor.max_cstate=1", "idle=nowait"]

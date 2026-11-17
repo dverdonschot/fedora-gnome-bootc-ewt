@@ -109,9 +109,17 @@ RUN --mount=type=cache,dst=/var/cache \
         linuxconsoletools \
         waydroid \
         node_exporter \
+        # AMD GPU powertuning daemon, carried over from the NixOS um790
+        # config (systemd.packages + lactd enabled there). Needs the
+        # ppfeaturemask karg in files/bootc/install/00-amdgpu.toml.
+        lact \
         # Layered on the client via rpm-ostree install; moved into the image
         # so `bootc update` is no longer blocked by local modifications.
         systemd-devel \
+        # Log shipping: tails the host journal to Loki. Config ships at
+        # /etc/alloy/config.alloy (host-agnostic via constants.hostname);
+        # enabled via 80-alloy.preset. Repo: files/system/etc/yum.repos.d/grafana.repo.
+        alloy \
         tailscale; \
     dnf5 clean all; \
     rm -rf /var/cache/dnf5 /var/cache/rpm-ostree /var/lib/rpm-ostree-pending* 2>/dev/null || true; \
@@ -137,6 +145,7 @@ COPY files/scripts/setup-libvirt.sh /usr/local/bin/setup-libvirt.sh
 # (See upstream bootc docs: drop-ins in /usr/lib/bootc/install/*.toml are
 # processed in alphanumerical order at install time.)
 COPY files/bootc/install/00-amdgpu.toml /usr/lib/bootc/install/00-amdgpu.toml
+COPY files/bootc/install/01-um790-idle.toml /usr/lib/bootc/install/01-um790-idle.toml
 
 # ---- Systemd preset + enable ----
 # libvirt preset is in files/system/usr/lib/systemd/system-preset/. Re-apply the
@@ -150,6 +159,7 @@ COPY files/bootc/install/00-amdgpu.toml /usr/lib/bootc/install/00-amdgpu.toml
 # instead of shipping a silently disabled daemon.
 RUN systemctl preset libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket \
         nix-daemon.socket nix-daemon.service tailscaled.service \
+        alloy.service \
         rpm-ostreed-automatic.timer && \
     systemctl enable node_exporter.service && \
     chmod 0755 \
