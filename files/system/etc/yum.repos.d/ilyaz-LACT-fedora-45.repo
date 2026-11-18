@@ -1,0 +1,15 @@
+# LACT COPR repo — sole source for the lact package (AMD GPU powertuning
+# daemon; see the Containerfile). lact is not in Fedora's own repos and the
+# upstream README points Fedora users at this COPR
+# (https://copr.fedorainfracloud.org/coprs/ilyaz/LACT/). Kept on the system
+# via the overlay so upgrades keep tracking the COPR.
+[copr:copr.fedorainfracloud.org:ilyaz:LACT]
+name=Copr repo for LACT owned by ilyaz
+baseurl=https://download.copr.fedorainfracloud.org/results/ilyaz/LACT/fedora-$releasever-$basearch/
+type=rpm-md
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://download.copr.fedorainfracloud.org/results/ilyaz/LACT/pubkey.gpg
+repo_gpgcheck=0
+enabled=1
+enabled_metadata=1

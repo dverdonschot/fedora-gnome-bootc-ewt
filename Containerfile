@@ -73,6 +73,22 @@ ARG LINT_SKIP=--skip=var-tmpfiles
 # why the same Containerfile builds fine in Forgejo but fails on a host
 # `sudo buildah bud --isolation=chroot` invocation. /var/cache stays mounted
 # because that is the real cache hot path dnf5 also writes to.
+
+# ---- Repos needed by the install step ----
+# grafana.repo provides alloy. It is also part of the system overlay
+# (files/system/etc/yum.repos.d/), but that overlay is COPY'd after the
+# install step, so dnf5 never saw it and the install failed with
+# "No match for argument: alloy". COPY it here first.
+COPY files/system/etc/yum.repos.d/grafana.repo /etc/yum.repos.d/grafana.repo
+# Same story: tailscale.repo provides tailscale. Fedora's F45 repo ships
+# 1.102.5; the upstream stable repo (1.104.x+, CVE fixes required >=1.104.4)
+# wins on version, so plain `dnf5 install tailscale` picks it up. The file
+# also stays on the system via the overlay, so upgrades keep tracking
+# pkgs.tailscale.com stable.
+COPY files/system/etc/yum.repos.d/tailscale.repo /etc/yum.repos.d/tailscale.repo
+# And lact: not in Fedora at all, only in the ilyaz/LACT COPR.
+COPY files/system/etc/yum.repos.d/ilyaz-LACT-fedora-45.repo /etc/yum.repos.d/ilyaz-LACT-fedora-45.repo
+
 RUN --mount=type=cache,dst=/var/cache \
     --mount=type=cache,dst=/var/log \
     set -euxo pipefail; \
